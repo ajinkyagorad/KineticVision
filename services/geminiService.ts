@@ -10,8 +10,8 @@ export class GeminiService {
   private videoInterval: number | null = null;
   private onStateUpdate: ((state: ParticleState) => void) | null = null;
 
-  constructor(apiKey: string) {
-    this.ai = new GoogleGenAI({ apiKey });
+  constructor() {
+    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   public async connect(onStateUpdate: (state: ParticleState) => void, onStatusChange: (status: string) => void) {
@@ -80,7 +80,9 @@ export class GeminiService {
                         if (this.onStateUpdate) {
                             this.onStateUpdate({
                                 expansion: Number(args.expansion) || 1,
-                                tension: Number(args.tension) || 0
+                                tension: Number(args.tension) || 0,
+                                focus: 0.5,
+                                rotation: { x: 0, y: 0 }
                             });
                         }
                         // Send success response back to keep model happy

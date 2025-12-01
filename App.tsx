@@ -8,7 +8,12 @@ const App: React.FC = () => {
   const [shape, setShape] = useState<ParticleShape>(ParticleShape.HEART);
   const [color, setColor] = useState<string>('#ff0055');
   const [visionState, setVisionState] = useState<VisionState>({ isLoaded: false, gesture: 'Initializing...', handsVisible: 0 });
-  const [particleState, setParticleState] = useState<ParticleState>({ expansion: 1, tension: 0 });
+  const [particleState, setParticleState] = useState<ParticleState>({ 
+    expansion: 1, 
+    tension: 0,
+    focus: 0.5,
+    rotation: { x: 0, y: 0 }
+  });
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const visionService = useRef<VisionService | null>(null);
@@ -54,12 +59,17 @@ const App: React.FC = () => {
         audio: false 
       });
       
-      videoRef.current.srcObject = stream;
-      
-      await videoRef.current.play();
-      
-      // Start prediction loop immediately after play resolves
-      requestRef.current = requestAnimationFrame(predict);
+      // Check ref again after await in case component unmounted
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        
+        // Start prediction loop immediately after play resolves
+        requestRef.current = requestAnimationFrame(predict);
+      } else {
+        // Cleanup if ref is gone
+        stream.getTracks().forEach(t => t.stop());
+      }
     } catch (err) {
       console.error("Camera error:", err);
       setVisionState(prev => ({ ...prev, gesture: 'Camera Error' }));

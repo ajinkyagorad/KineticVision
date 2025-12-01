@@ -8,7 +8,7 @@ interface ControlsProps {
   setColor: (c: string) => void;
   visionState: VisionState;
   videoRef: React.RefObject<HTMLVideoElement>;
-  particleState: { expansion: number; tension: number };
+  particleState: { expansion: number; tension: number; focus: number; rotation: {x: number, y: number} };
 }
 
 export const Controls: React.FC<ControlsProps> = ({
@@ -41,7 +41,7 @@ export const Controls: React.FC<ControlsProps> = ({
                 <div className="mt-4 space-y-3">
                     <div className="space-y-1">
                         <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
-                            <span>Expansion (Hand Dist)</span>
+                            <span>Expansion</span>
                             <span>{particleState.expansion.toFixed(1)}</span>
                         </div>
                         <div className="w-full bg-gray-800 h-1 rounded overflow-hidden">
@@ -51,21 +51,44 @@ export const Controls: React.FC<ControlsProps> = ({
 
                     <div className="space-y-1">
                         <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
-                            <span>Tension (Fist)</span>
+                            <span>Tension</span>
                             <span>{particleState.tension.toFixed(2)}</span>
                         </div>
                         <div className="w-full bg-gray-800 h-1 rounded overflow-hidden">
                             <div className="bg-indigo-400 h-full transition-all duration-200" style={{ width: `${particleState.tension * 100}%` }} />
                         </div>
                     </div>
+
+                    <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
+                            <span>Intensity/Focus</span>
+                            <span>{particleState.focus.toFixed(2)}</span>
+                        </div>
+                        <div className="w-full bg-gray-800 h-1 rounded overflow-hidden">
+                            <div className="bg-pink-400 h-full transition-all duration-200" style={{ width: `${particleState.focus * 100}%` }} />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
+                            <span>Rotation (X/Y)</span>
+                        </div>
+                        <div className="flex gap-1 h-1">
+                             <div className="w-1/2 bg-gray-800 rounded overflow-hidden flex items-center justify-center">
+                                <div className="h-full bg-blue-500 transition-all duration-200" style={{ width: `${(Math.abs(particleState.rotation.y) / 3.14) * 100}%` }} />
+                             </div>
+                             <div className="w-1/2 bg-gray-800 rounded overflow-hidden flex items-center justify-center">
+                                <div className="h-full bg-green-500 transition-all duration-200" style={{ width: `${(Math.abs(particleState.rotation.x) / 1.57) * 100}%` }} />
+                             </div>
+                        </div>
+                    </div>
                 </div>
             )}
             
             <div className="mt-4 pt-3 border-t border-white/10 text-[10px] text-gray-500">
-                <p>✌️ Victory = Flower</p>
-                <p>👍 Thumbs Up = Heart</p>
-                <p>☝️ Point Up = Fireworks</p>
-                <p>🤟 Love = Buddha</p>
+                <p>Move hands to rotate. Bring closer to focus.</p>
+                <p className="mt-2 text-white/50">✌️ Victory = Flower | 👍 Thumbs Up = Heart</p>
+                <p className="text-white/50">☝️ Point Up = Fireworks | 🤟 Love = Buddha</p>
             </div>
         </div>
 
