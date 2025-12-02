@@ -53,7 +53,7 @@ export class VisionService {
       
       try {
         const result = this.gestureRecognizer.recognizeForVideo(video, nowInMs);
-        return this.analyzeResult(result);
+        return this.analyzeResult(result, video.videoWidth);
       } catch (e) {
         console.warn("Vision processing error:", e);
         // Return neutral state on error
@@ -73,7 +73,7 @@ export class VisionService {
     };
   }
 
-  private analyzeResult(result: GestureRecognizerResult): { 
+  private analyzeResult(result: GestureRecognizerResult, frameWidth: number): { 
     state: ParticleState, 
     gesture: string, 
     handsDetected: number 
@@ -84,7 +84,7 @@ export class VisionService {
 
     let expansion = 1.0;
     let tension = 0.0;
-    let focus = 0.5;
+    let focus = 0.0;
     let rotation = { x: 0, y: 0 };
     let dominantGesture = "None";
 
@@ -107,55 +107,82 @@ export class VisionService {
       else if (isOpen) tension = 0.1;
       else tension = 0.4;
 
-      // --- Expansion (Hand Distance) & Rotation (Centroid) ---
+      // --- Metric Extraction ---
       let centroidX = 0;
       let centroidY = 0;
-      let handSize = 0; // Proxy for depth/proximity
+      let rawHandSize = 0; // 0.0 to 1.0 relative to frame
 
       if (handsDetected === 2) {
         const leftWrist = landmarks[0][0];
         const rightWrist = landmarks[1][0];
         
+        // --- Expansion (Distance between hands) ---
         const dx = leftWrist.x - rightWrist.x;
         const dy = leftWrist.y - rightWrist.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-        // Map distance: 0.2 (close) -> 0.8 (far) to expansion 0.1 -> 3.0
-        expansion = Math.max(0.1, Math.min(3.0, distance * 5));
-        
+        // Map distance: 0.1 (touching) to 0.8 (arms wide) -> Expansion 0.2 to 3.0
+        // Use a power curve for more sensitivity in the middle
+        expansion = Math.max(0.2, Math.min(3.5, Math.pow(dist * 2.5, 1.2)));
+
         centroidX = (leftWrist.x + rightWrist.x) / 2;
         centroidY = (leftWrist.y + rightWrist.y) / 2;
 
-        // Estimate size/proximity using distance between wrist and middle finger tip for both hands
-        const size1 = Math.abs(landmarks[0][0].y - landmarks[0][9].y); // Wrist to Middle
+        // Avg Hand Size
+        const size1 = Math.abs(landmarks[0][0].y - landmarks[0][9].y); 
         const size2 = Math.abs(landmarks[1][0].y - landmarks[1][9].y);
-        handSize = (size1 + size2) / 2;
+        rawHandSize = (size1 + size2) / 2;
 
       } else {
         expansion = 1.0; 
         const wrist = landmarks[0][0];
+        const middleTip = landmarks[0][9];
+        
         centroidX = wrist.x;
         centroidY = wrist.y;
         
-        // Estimate size based on single hand
-        handSize = Math.abs(landmarks[0][0].y - landmarks[0][9].y);
+        rawHandSize = Math.abs(wrist.y - middleTip.y);
       }
 
-      // --- Focus (Intensity) Calculation ---
-      // handSize typically ranges from 0.1 (far) to 0.4 (very close)
-      // We want Focus 0 (far) to 1 (close)
-      // 0.1 -> 0.0, 0.4 -> 1.0
-      focus = Math.max(0, Math.min(1, (handSize - 0.1) * 3.3));
+      // --- Focus (Sweet Spot) Calculation ---
+      // Requirement: Focused when hand is ~1/4th frame width (0.25). 
+      // Dissociates if closer (> 0.25) or farther (< 0.25).
+      
+      const TARGET_SIZE = 0.25; // 25% of frame
+      const TOLERANCE = 0.15;   // Range of effect
+
+      // Calculate deviation from target
+      const deviation = Math.abs(rawHandSize - TARGET_SIZE);
+      
+      // Normalize deviation: 0 deviation = 1.0 focus. >TOLERANCE deviation = 0.0 focus.
+      if (deviation < TOLERANCE) {
+          focus = 1.0 - (deviation / TOLERANCE);
+          // Add a curve to make the "sweet spot" feel sharper
+          focus = Math.pow(focus, 2); 
+      } else {
+          focus = 0.0;
+      }
 
       // --- Rotation Calculation ---
-      // Map X (0..1) -> Y Rotation (-PI..PI) (Inverted for natural feel)
-      // Map Y (0..1) -> X Rotation (-PI/2..PI/2)
-      rotation.y = -(centroidX - 0.5) * Math.PI * 1.5; 
-      rotation.x = -(centroidY - 0.5) * Math.PI;
+      // Requirement: Swap Axes.
+      // Screen X controls Rotation X (Tilt Up/Down logic if we map X to X? No, usually X movement rotates around Y axis)
+      // User asked to SWAP. 
+      // Previous: X -> Y, Y -> X.
+      // New: X -> X, Y -> Y (This feels like "tilting" the container).
+      // Also fixed "default orientation" by centering around 0.
+      
+      // X: 0 (left) -> -0.5 -> Rotate -PI/3
+      // X: 1 (right) -> 0.5 -> Rotate +PI/3
+      rotation.y = (centroidX - 0.5) * (Math.PI / 1.5); 
+      
+      // Y: 0 (top) -> -0.5 -> Rotate -PI/3
+      // Y: 1 (bottom) -> 0.5 -> Rotate +PI/3
+      rotation.x = -(centroidY - 0.5) * (Math.PI / 1.5); // Inverted Y for natural feel (Hand up = Look up/Tilt up)
 
     } else {
       dominantGesture = "No Hands";
-      focus = 0.3; // Default low focus
+      focus = 0.0; // Dissociated when no hands
+      // Slowly return to neutral rotation? handled by lerp in Scene
     }
 
     return {

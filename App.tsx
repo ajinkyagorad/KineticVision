@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Scene } from './components/ParticleScene';
 import { Controls } from './components/Controls';
 import { VisionService } from './services/visionService';
+import { AudioService } from './services/audioService';
 import { ParticleShape, ParticleState, VisionState } from './types';
 
 const App: React.FC = () => {
@@ -17,15 +18,20 @@ const App: React.FC = () => {
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const visionService = useRef<VisionService | null>(null);
+  const audioService = useRef<AudioService | null>(null);
   const requestRef = useRef<number>(0);
   const isInitialized = useRef<boolean>(false);
 
-  // Initialize Vision Service
+  // Initialize Services
   useEffect(() => {
     if (isInitialized.current) return;
     isInitialized.current = true;
 
-    const init = async () => {
+    // Initialize Audio Service
+    audioService.current = new AudioService();
+
+    // Initialize Vision Service
+    const initVision = async () => {
       try {
         visionService.current = new VisionService();
         await visionService.current.initialize();
@@ -36,7 +42,7 @@ const App: React.FC = () => {
         setVisionState(prev => ({ ...prev, gesture: 'Init Failed' }));
       }
     };
-    init();
+    initVision();
 
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
@@ -81,10 +87,15 @@ const App: React.FC = () => {
     if (visionService.current && videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
       const result = visionService.current.processVideo(videoRef.current);
       
-      // Only update state if we got a valid result (not 'None' from skipped frame)
+      // Only update state if we got a valid result
       if (result.gesture !== 'None' && result.gesture !== 'Waiting for Video...') {
           setParticleState(result.state);
           
+          // Update Audio Engine with new physics state
+          if (audioService.current) {
+             audioService.current.update(result.state);
+          }
+
           setVisionState(prev => ({
             ...prev,
             gesture: result.gesture,
@@ -114,6 +125,17 @@ const App: React.FC = () => {
     requestRef.current = requestAnimationFrame(predict);
   };
 
+  const handleToggleSound = (muted: boolean) => {
+    if (audioService.current) {
+        // Ensure initialized context is running
+        if (!muted) {
+            audioService.current.initialize();
+            audioService.current.resume();
+        }
+        audioService.current.toggleMute(muted);
+    }
+  };
+
   return (
     <div className="relative w-full h-full bg-black overflow-hidden font-sans">
       
@@ -132,6 +154,7 @@ const App: React.FC = () => {
             visionState={visionState}
             videoRef={videoRef}
             particleState={particleState}
+            onToggleSound={handleToggleSound}
         />
       </div>
     </div>
